@@ -1656,7 +1656,7 @@ Next connect your celo wallet, select the contract you want to deploy and finall
 
 ## Conclusion
 
-In this tutorial, we've built a decentralized skincare product marketplace on Ethereum using Solidity. We covered key functions such as adding products, ordering products, reviewing them, and requesting refunds. By understanding this code, you now have the foundation to expand upon this marketplace and add more advanced features to meet your specific requirements.
+In this tutorial, we've built a decentralized skincare product marketplace on Ethereum using Solidity and for the Frontend using React. We covered key functions such as adding products, ordering products, reviewing them, and requesting refunds. By understanding this code, you now have the foundation to expand upon this marketplace and add more advanced features to meet your specific requirements.
 
 ## Next Steps
 
