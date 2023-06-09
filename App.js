@@ -129,6 +129,17 @@ function App() {
     }
   };
 
+  const refundProduct = async (_index) => {
+    try {
+      await contract.methods.refundProduct(_index).send({ from: address });
+      getProducts();
+      getBalance();
+      alert(`You have successfully refunded the product.`);
+    } catch (error) {
+      alert(error);
+    }
+  };
+
   const addProduct = async (
     _brand,
     _image,
@@ -203,12 +214,10 @@ function App() {
                 ) : (
                   <button
                     className="btn btn-secondary"
-                    onClick={() => {
-                      setLoading(true);
-                      connectToWallet();
-                    }}
+                    onClick={() => connectToWallet()}
+                    disabled={Loading}
                   >
-                    {Loading ? "Loading..." : "Connect"}
+                    {Loading ? "Connecting..." : "Connect Wallet"}
                   </button>
                 )}
               </li>
@@ -217,60 +226,94 @@ function App() {
         </div>
       </nav>
 
-      <section className="pt-5 pb-5">
-        <Carousel />
-      </section>
-      <section id="order_product">
-        <h2 className="text-center my-4">Buy Products</h2>
-        <div className="d-flex justify-content-around flex-wrap">
-          {productLoading ? (
-            <div
-              className="w-100 fs-2"
-              style={{
-                height: "200px",
-                display: "flex",
-                justifyContent: "center",
-                alignItems: "center",
-              }}
-            >
-              Loading products...
+      <div className="container py-4">
+        <div className="row">
+          <div className="col-md-12">
+            <h1 className="text-center">Skin Care Store</h1>
+          </div>
+          <div className="col-md-12">
+            <div className="tabs">
+              <ul className="nav nav-pills nav-fill">
+                <li className="nav-item">
+                  <a
+                    className={`nav-link ${tab === "1" ? "active" : ""}`}
+                    onClick={() => setTab("1")}
+                  >
+                    All Products
+                  </a>
+                </li>
+                <li className="nav-item">
+                  <a
+                    className={`nav-link ${tab === "2" ? "active" : ""}`}
+                    onClick={() => setTab("2")}
+                  >
+                    My Products
+                  </a>
+                </li>
+              </ul>
             </div>
-          ) : (
-            <>
-              {products.map((product) => {
-                const {
-                  index,
-                  brand,
-                  image,
-                  category,
-                  deliveredWithin,
-                  numberOfStock,
-                  amount,
-                } = product;
-
-                return (
-                  <ProductCard
-                    key={index}
-                    id={index}
-                    brand={brand}
-                    image={image}
-                    category={category}
-                    deliveredWithin={deliveredWithin}
-                    numberOfStock={numberOfStock}
-                    amount={amount}
-                    orderProduct={orderProduct}
-                  />
-                );
-              })}
-            </>
-          )}
+          </div>
+          <div className="col-md-12">
+            <div className="content">
+              {tab === "1" ? (
+                <>
+                  <h2>All Products</h2>
+                  {productLoading ? (
+                    <p>Loading products...</p>
+                  ) : (
+                    <>
+                      <div className="row">
+                        {products.map((product) => (
+                          <div className="col-md-3" key={product.index}>
+                            <ProductCard
+                              product={product}
+                              orderProduct={orderProduct}
+                              refundProduct={refundProduct}
+                            />
+                          </div>
+                        ))}
+                      </div>
+                      {products.length === 0 && (
+                        <p>No products available.</p>
+                      )}
+                    </>
+                  )}
+                </>
+              ) : (
+                <>
+                  <h2>My Products</h2>
+                  {productLoading ? (
+                    <p>Loading products...</p>
+                  ) : (
+                    <>
+                      <div className="row">
+                        {products
+                          .filter((product) => product.owner === address)
+                          .map((product) => (
+                            <div className="col-md-3" key={product.index}>
+                              <ProductCard
+                                product={product}
+                                refundProduct={refundProduct}
+                              />
+                            </div>
+                          ))}
+                      </div>
+                      {products.filter((product) => product.owner === address).length ===
+                        0 && <p>No products available.</p>}
+                    </>
+                  )}
+                </>
+              )}
+            </div>
+          </div>
         </div>
-      </section>
+      </div>
 
-      <div className="container  form-div   cont" id="product-form">
-        <h1 className="h1 text-center">ADD PRODUCT</h1>
+      <div id="product-form">
         <Form addProduct={addProduct} />
       </div>
+
+      <Carousel />
     </>
   );
 }

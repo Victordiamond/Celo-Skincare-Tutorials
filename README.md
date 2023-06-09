@@ -193,6 +193,27 @@ contract SkincareProduct {
     function getProductLength() public view returns (uint) {
         return productsLength;
     }
+    
+    function refundBuyer(uint _index, address _buyer) public {
+        require(productsLength > _index, "Invalid product index");
+        Product storage product = products[_index];
+        require(msg.sender == product.owner, "Only the owner can initiate a refund");
+        require(productRefunds[_index].refunds[_buyer], "Buyer has not requested a refund");
+        
+        product.numberOfStock++;
+        product.sales--;
+        
+        require(
+            IERC20Token(cUsdTokenAddress).transferFrom(
+                product.owner,
+                _buyer,
+                product.amount
+            ),
+            "Refund failed."
+        );
+        
+        delete productRefunds[_index].refunds[_buyer];
+    }
 }
 
 ```
@@ -483,7 +504,40 @@ contract SkincareProduct {
 - The `hasRefunded` function checks whether a specific user has requested a refund for a product.
 - The `getProductLength` function returns the total number of products available in the marketplace.
 
+**Refund Feature**
 
+The refund feature allows the vendor to refund a product to the buyer. When a refund is initiated, the product is returned to the vendor's inventory, and the buyer is reimbursed with the appropriate amount of cUSD tokens.
+
+```solidity
+function refundProduct(uint256 _index) public {
+  require(_index < products.length, "Invalid product index");
+  Product storage product = products[_index];
+
+  require(product.owner == msg.sender, "You are not the owner of this product");
+  require(product.refunds > 0, "There are no refunds available for this product");
+
+  product.numberOfStock += 1;
+  product.refunds -= 1;
+
+  uint256 refundAmount = product.amount;
+
+  require(cUSDTContract.transfer(msg.sender, refundAmount), "Failed to transfer cUSD tokens");
+
+  emit ProductRefunded(_index, msg.sender, refundAmount);
+}
+
+```
+
+#### Explanation
+
+In this function:
+
+- We check if the provided product index is valid and if the caller is the owner of the product.
+- We ensure that there are available refunds for the product.
+- If the conditions are met, we increase the stock of the product and decrease the number of refunds.
+- The refund amount is calculated based on the original product amount.
+- We transfer the refund amount in cUSD tokens to the buyer's address using the `transfer` function of the cUSD token contract.
+- Finally, we emit an event `ProductRefunded` to notify the frontend or other parties about the product refund.
 
 
 ## Frontend
@@ -626,6 +680,17 @@ function App() {
     }
   };
 
+  const refundProduct = async (_index) => {
+    try {
+      await contract.methods.refundProduct(_index).send({ from: address });
+      getProducts();
+      getBalance();
+      alert(`You have successfully refunded the product.`);
+    } catch (error) {
+      alert(error);
+    }
+  };
+
   const addProduct = async (
     _brand,
     _image,
@@ -700,12 +765,10 @@ function App() {
                 ) : (
                   <button
                     className="btn btn-secondary"
-                    onClick={() => {
-                      setLoading(true);
-                      connectToWallet();
-                    }}
+                    onClick={() => connectToWallet()}
+                    disabled={Loading}
                   >
-                    {Loading ? "Loading..." : "Connect"}
+                    {Loading ? "Connecting..." : "Connect Wallet"}
                   </button>
                 )}
               </li>
@@ -714,60 +777,94 @@ function App() {
         </div>
       </nav>
 
-      <section className="pt-5 pb-5">
-        <Carousel />
-      </section>
-      <section id="order_product">
-        <h2 className="text-center my-4">Buy Products</h2>
-        <div className="d-flex justify-content-around flex-wrap">
-          {productLoading ? (
-            <div
-              className="w-100 fs-2"
-              style={{
-                height: "200px",
-                display: "flex",
-                justifyContent: "center",
-                alignItems: "center",
-              }}
-            >
-              Loading products...
+      <div className="container py-4">
+        <div className="row">
+          <div className="col-md-12">
+            <h1 className="text-center">Skin Care Store</h1>
+          </div>
+          <div className="col-md-12">
+            <div className="tabs">
+              <ul className="nav nav-pills nav-fill">
+                <li className="nav-item">
+                  <a
+                    className={`nav-link ${tab === "1" ? "active" : ""}`}
+                    onClick={() => setTab("1")}
+                  >
+                    All Products
+                  </a>
+                </li>
+                <li className="nav-item">
+                  <a
+                    className={`nav-link ${tab === "2" ? "active" : ""}`}
+                    onClick={() => setTab("2")}
+                  >
+                    My Products
+                  </a>
+                </li>
+              </ul>
             </div>
-          ) : (
-            <>
-              {products.map((product) => {
-                const {
-                  index,
-                  brand,
-                  image,
-                  category,
-                  deliveredWithin,
-                  numberOfStock,
-                  amount,
-                } = product;
-
-                return (
-                  <ProductCard
-                    key={index}
-                    id={index}
-                    brand={brand}
-                    image={image}
-                    category={category}
-                    deliveredWithin={deliveredWithin}
-                    numberOfStock={numberOfStock}
-                    amount={amount}
-                    orderProduct={orderProduct}
-                  />
-                );
-              })}
-            </>
-          )}
+          </div>
+          <div className="col-md-12">
+            <div className="content">
+              {tab === "1" ? (
+                <>
+                  <h2>All Products</h2>
+                  {productLoading ? (
+                    <p>Loading products...</p>
+                  ) : (
+                    <>
+                      <div className="row">
+                        {products.map((product) => (
+                          <div className="col-md-3" key={product.index}>
+                            <ProductCard
+                              product={product}
+                              orderProduct={orderProduct}
+                              refundProduct={refundProduct}
+                            />
+                          </div>
+                        ))}
+                      </div>
+                      {products.length === 0 && (
+                        <p>No products available.</p>
+                      )}
+                    </>
+                  )}
+                </>
+              ) : (
+                <>
+                  <h2>My Products</h2>
+                  {productLoading ? (
+                    <p>Loading products...</p>
+                  ) : (
+                    <>
+                      <div className="row">
+                        {products
+                          .filter((product) => product.owner === address)
+                          .map((product) => (
+                            <div className="col-md-3" key={product.index}>
+                              <ProductCard
+                                product={product}
+                                refundProduct={refundProduct}
+                              />
+                            </div>
+                          ))}
+                      </div>
+                      {products.filter((product) => product.owner === address).length ===
+                        0 && <p>No products available.</p>}
+                    </>
+                  )}
+                </>
+              )}
+            </div>
+          </div>
         </div>
-      </section>
+      </div>
 
-      <div className="container  form-div   cont" id="product-form">
-        <h1 className="h1 text-center">ADD PRODUCT</h1>
+      <div id="product-form">
         <Form addProduct={addProduct} />
       </div>
+
+      <Carousel />
     </>
   );
 }
@@ -1101,7 +1198,33 @@ return (
 - Inside the products carousel, the `ProductCard` component is mapped over the `products` array to display each product's details.
 - The `Form` component is rendered when the order tab is active, and the `orderProduct` function is passed as a prop to handle the ordering process.
 
+**Refund Users**
 
+This function is responsible for initiating the refund process when invoked.
+
+```solidity
+const refundProduct = async (_index) => {
+  try {
+    await contract.methods.refundProduct(_index).send({ from: address });
+    getProducts();
+    getBalance();
+    alert(`You have successfully refunded the product.`);
+  } catch (error) {
+    alert(error);
+  }
+};
+
+```
+
+#### Explanation
+
+- The `refundProduct` function is an asynchronous function that takes the `_index` parameter, representing the index of the product to be refunded.
+- Inside the function, we use a try-catch block to handle any potential errors that may occur during the refund process.
+- We call the `refundProduct` function of the smart contract by using `contract.methods.refundProduct(_index).send({ from: address })`. This sends a transaction to the smart contract, requesting the refund of the product at the specified index.
+- After successfully initiating the refund transaction, we call the `getProducts` and `getBalance` functions. These functions are responsible for fetching the updated list of products and the current balance after the refund.
+- Finally, we display an alert message to notify the user that the refund process was successful.
+
+By updating the React frontend with the refundProduct function, you enable vendors to initiate refunds for products they own directly from the user interface.
 
 ### Carousel.jsx
 

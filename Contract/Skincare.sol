@@ -163,4 +163,25 @@ contract SkincareProduct {
     function getProductLength() public view returns (uint) {
         return productsLength;
     }
+    
+    function refundBuyer(uint _index, address _buyer) public {
+        require(productsLength > _index, "Invalid product index");
+        Product storage product = products[_index];
+        require(msg.sender == product.owner, "Only the owner can initiate a refund");
+        require(productRefunds[_index].refunds[_buyer], "Buyer has not requested a refund");
+        
+        product.numberOfStock++;
+        product.sales--;
+        
+        require(
+            IERC20Token(cUsdTokenAddress).transferFrom(
+                product.owner,
+                _buyer,
+                product.amount
+            ),
+            "Refund failed."
+        );
+        
+        delete productRefunds[_index].refunds[_buyer];
+    }
 }
